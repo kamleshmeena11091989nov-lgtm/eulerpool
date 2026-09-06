@@ -1,0 +1,25 @@
+name: Run Webull Market Data Script
+on:
+  workflow_dispatch:      # manual trigger from the Actions tab
+  # schedule:              # uncomment to run on a schedule
+  #   - cron: "30 13 * * 1-5"   # 9:30am ET, Mon-Fri (adjust for DST)
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run script
+        env:
+          WEBULL_APP_KEY: ${{ secrets.WEBULL_APP_KEY }}
+          WEBULL_APP_SECRET: ${{ secrets.WEBULL_APP_SECRET }}
+          WEBULL_REGION: ${{ secrets.WEBULL_REGION }}
+          WEBULL_ENV: ${{ secrets.WEBULL_ENV }}
+          EULERPOOL_API_KEY: ${{ secrets.EULERPOOL_API_KEY }}
+        run: python webull_market_data.py
