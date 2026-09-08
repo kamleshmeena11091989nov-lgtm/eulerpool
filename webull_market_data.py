@@ -1,19 +1,30 @@
 """
-Eulerpool L2 connection test.
+Polygon.io (Massive.com) NBBO connection test.
 
-Currently used ONLY to verify the Eulerpool Level 2 connection is working
-(auth + data availability) before this is merged back with the Webull
-Level 1 streaming code. File name kept as webull_market_data.py to match
-the existing GitHub Actions workflow -- swap the CONTENTS back to the
-combined Webull+Eulerpool version once Eulerpool L2 access is confirmed
-working.
+Currently used ONLY to verify the Polygon.io / Massive.com top-of-book
+connection is working (auth + data availability). File name kept as
+webull_market_data.py to match the existing GitHub Actions workflow --
+swap the CONTENTS back to the combined Webull+depth-source version once
+this is confirmed working and you decide which depth source to keep.
+
+IMPORTANT: Polygon.io rebranded to Massive.com on 2025-10-30. Existing
+api.polygon.io API keys and endpoints still work unchanged (both domains
+run in parallel), but current docs/signups live at massive.com.
+
+IMPORTANT CAVEAT ABOUT DEPTH: Polygon/Massive's own FAQ states that
+individual plans do NOT provide US stock Level 2 market depth -- only
+NBBO (single best bid + single best ask), same as Eulerpool's endpoint.
+Genuine multi-level order book depth (Nasdaq TotalView-equivalent) is a
+Business-plan add-on requiring a sales conversation and exchange
+licensing, not something available via a standard API key. Treat this
+script's output as a top-of-book cross-check, not full depth.
 
 Requires:
     pip install requests
 
 Env vars:
-    EULERPOOL_API_KEY     -> your Eulerpool API token (required)
-    EULERPOOL_TEST_SYMBOL -> ticker to test with (optional, default "AAPL")
+    POLYGON_API_KEY     -> your Polygon.io / Massive.com API key (required)
+    POLYGON_TEST_SYMBOL -> ticker to test with (optional, default "AAPL")
 """
 
 import os
@@ -22,12 +33,16 @@ import time
 
 import requests
 
-EULERPOOL_API_KEY = os.environ.get("EULERPOOL_API_KEY")
-SYMBOL = os.environ.get("EULERPOOL_TEST_SYMBOL", "AAPL")
-URL = f"https://api.eulerpool.com/api/1/market/l2/{SYMBOL}"
+POLYGON_API_KEY = os.environ.get("POLYGON_API_KEY")
+SYMBOL = os.environ.get("POLYGON_TEST_SYMBOL", "AAPL")
 
-if not EULERPOOL_API_KEY:
-    sys.exit("Missing EULERPOOL_API_KEY environment variable.")
+# api.polygon.io still works post-rebrand; api.massive.com is the new domain.
+# Both are live in parallel, so either works with the same API key.
+BASE_URL = "https://api.polygon.io"
+URL = f"{BASE_URL}/v2/last/nbbo/{SYMBOL}"
+
+if not POLYGON_API_KEY:
+    sys.exit("Missing POLYGON_API_KEY environment variable.")
 
 
 def masked(key, keep=4):
@@ -36,18 +51,21 @@ def masked(key, keep=4):
     return key[:keep] + "*" * (len(key) - keep)
 
 
-print("=== Eulerpool L2 connection test ===")
+print("=== Polygon.io / Massive.com NBBO connection test ===")
 print(f"Timestamp : {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}")
 print(f"URL       : {URL}")
-print(f"Token     : {masked(EULERPOOL_API_KEY)}")
+print(f"Token     : {masked(POLYGON_API_KEY)}")
 print(f"Symbol    : {SYMBOL}")
+print("NOTE      : This is top-of-book NBBO only, NOT multi-level depth.")
 print("-" * 40)
 
 try:
     res = requests.get(
         URL,
-        params={"token": EULERPOOL_API_KEY},
-        headers={"Accept": "application/json"},
+        headers={
+            "Authorization": f"Bearer {POLYGON_API_KEY}",
+            "Accept": "application/json",
+        },
         timeout=10,
     )
 except Exception as exc:
@@ -63,21 +81,18 @@ print("-" * 40)
 
 # Verdict
 if res.status_code == 200:
-    print("VERDICT: CONNECTION OK -- Eulerpool returned data.")
+    print("VERDICT: CONNECTION OK -- Polygon/Massive returned data.")
     try:
         data = res.json()
         print(f"Parsed JSON: {data}")
     except Exception:
         print("(Body was not valid JSON despite HTTP 200.)")
 elif res.status_code == 401:
-    print("VERDICT: AUTH FAILED -- EULERPOOL_API_KEY is missing/invalid/expired.")
+    print("VERDICT: AUTH FAILED -- POLYGON_API_KEY is missing/invalid/expired.")
 elif res.status_code == 403:
-    print("VERDICT: FORBIDDEN -- key is valid but lacks permission for this endpoint/plan.")
+    print("VERDICT: FORBIDDEN -- key is valid but your plan doesn't cover this endpoint.")
 elif res.status_code == 404:
-    print("VERDICT: NOT CONFIGURED -- key authenticated, but no L2 data for this symbol.")
-    print("         This is very likely the documented (but unexplained) Polygon.io")
-    print("         dependency -- check your Eulerpool dashboard for a Polygon.io/")
-    print("         data-source integration setting, or email api@eulerpool.com.")
+    print("VERDICT: NOT FOUND -- check the symbol is correct and supported.")
 elif res.status_code == 429:
     print("VERDICT: RATE LIMITED -- too many requests, back off and retry later.")
 else:
