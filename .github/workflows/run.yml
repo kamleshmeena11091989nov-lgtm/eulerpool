@@ -17,6 +17,6 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run script
         env:
-          EULERPOOL_API_KEY: ${{ secrets.EULERPOOL_API_KEY }}
-          EULERPOOL_TEST_SYMBOL: AAPL
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          POLYGON_TEST_SYMBOL: AAPL
         run: python webull_market_data.py
