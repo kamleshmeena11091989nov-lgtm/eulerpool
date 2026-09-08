@@ -17,9 +17,6 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run script
         env:
-          WEBULL_APP_KEY: ${{ secrets.WEBULL_APP_KEY }}
-          WEBULL_APP_SECRET: ${{ secrets.WEBULL_APP_SECRET }}
-          WEBULL_REGION: ${{ secrets.WEBULL_REGION }}
-          WEBULL_ENV: ${{ secrets.WEBULL_ENV }}
           EULERPOOL_API_KEY: ${{ secrets.EULERPOOL_API_KEY }}
+          EULERPOOL_TEST_SYMBOL: AAPL
         run: python webull_market_data.py
