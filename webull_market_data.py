@@ -1,23 +1,23 @@
 """
-Polygon.io (Massive.com) NBBO connection test.
+Polygon.io (Massive.com) previous-close (EOD) connection test.
 
-Currently used ONLY to verify the Polygon.io / Massive.com top-of-book
-connection is working (auth + data availability). File name kept as
-webull_market_data.py to match the existing GitHub Actions workflow --
-swap the CONTENTS back to the combined Webull+depth-source version once
-this is confirmed working and you decide which depth source to keep.
+Uses the free "Stocks Basic" ($0/mo) tier -- end-of-day data only, no
+real-time or 15-min-delayed quotes/trades entitlement required. This is
+a deliberate downgrade from the earlier NBBO version of this script,
+which needs the $199/mo Stocks Advanced plan.
+
+File name kept as webull_market_data.py to match the existing GitHub
+Actions workflow.
 
 IMPORTANT: Polygon.io rebranded to Massive.com on 2025-10-30. Existing
-api.polygon.io API keys and endpoints still work unchanged (both domains
-run in parallel), but current docs/signups live at massive.com.
+api.polygon.io API keys and endpoints still work unchanged.
 
-IMPORTANT CAVEAT ABOUT DEPTH: Polygon/Massive's own FAQ states that
-individual plans do NOT provide US stock Level 2 market depth -- only
-NBBO (single best bid + single best ask), same as Eulerpool's endpoint.
-Genuine multi-level order book depth (Nasdaq TotalView-equivalent) is a
-Business-plan add-on requiring a sales conversation and exchange
-licensing, not something available via a standard API key. Treat this
-script's output as a top-of-book cross-check, not full depth.
+WHAT YOU GET ON THIS FREE TIER: the previous completed trading day's
+open/high/low/close/volume for a ticker. NOT real-time, NOT intraday,
+NOT bid/ask, and NOT order book depth of any kind -- just yesterday's
+daily bar. If you need same-day or intraday prices, that requires at
+least the $29/mo Starter plan (15-min delayed); real-time bid/ask needs
+the $199/mo Advanced plan (see earlier version of this script).
 
 Requires:
     pip install requests
@@ -36,10 +36,8 @@ import requests
 POLYGON_API_KEY = os.environ.get("POLYGON_API_KEY")
 SYMBOL = os.environ.get("POLYGON_TEST_SYMBOL", "AAPL")
 
-# api.polygon.io still works post-rebrand; api.massive.com is the new domain.
-# Both are live in parallel, so either works with the same API key.
 BASE_URL = "https://api.polygon.io"
-URL = f"{BASE_URL}/v2/last/nbbo/{SYMBOL}"
+URL = f"{BASE_URL}/v2/aggs/ticker/{SYMBOL}/prev"
 
 if not POLYGON_API_KEY:
     sys.exit("Missing POLYGON_API_KEY environment variable.")
@@ -51,12 +49,12 @@ def masked(key, keep=4):
     return key[:keep] + "*" * (len(key) - keep)
 
 
-print("=== Polygon.io / Massive.com NBBO connection test ===")
+print("=== Polygon.io / Massive.com previous-close (EOD) test ===")
 print(f"Timestamp : {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}")
 print(f"URL       : {URL}")
 print(f"Token     : {masked(POLYGON_API_KEY)}")
 print(f"Symbol    : {SYMBOL}")
-print("NOTE      : This is top-of-book NBBO only, NOT multi-level depth.")
+print("NOTE      : Free tier -- previous day's OHLC only, not real-time.")
 print("-" * 40)
 
 try:
@@ -85,15 +83,26 @@ if res.status_code == 200:
     try:
         data = res.json()
         print(f"Parsed JSON: {data}")
+        results = data.get("results") or []
+        if results:
+            bar = results[0]
+            print(
+                f"Previous close for {SYMBOL}: "
+                f"open={bar.get('o')} high={bar.get('h')} "
+                f"low={bar.get('l')} close={bar.get('c')} "
+                f"volume={bar.get('v')}"
+            )
     except Exception:
         print("(Body was not valid JSON despite HTTP 200.)")
 elif res.status_code == 401:
     print("VERDICT: AUTH FAILED -- POLYGON_API_KEY is missing/invalid/expired.")
 elif res.status_code == 403:
     print("VERDICT: FORBIDDEN -- key is valid but your plan doesn't cover this endpoint.")
+    print("         This endpoint should be free-tier eligible -- if you still see")
+    print("         this, double check the key is active and unrestricted.")
 elif res.status_code == 404:
     print("VERDICT: NOT FOUND -- check the symbol is correct and supported.")
 elif res.status_code == 429:
-    print("VERDICT: RATE LIMITED -- too many requests, back off and retry later.")
+    print("VERDICT: RATE LIMITED -- free tier is 5 calls/minute, back off and retry.")
 else:
     print(f"VERDICT: UNEXPECTED STATUS {res.status_code} -- see raw body above.")
